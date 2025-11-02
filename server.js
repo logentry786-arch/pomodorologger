@@ -1,32 +1,44 @@
 const express = require('express');
 const app = express();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server, {
-    cors: { origin: "*" }
+const http = require('http');
+const server = http.createServer(app); // <-- Create the server here
+const { Server } = require("socket.io");
+
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allow all connections (you can restrict this later)
+    methods: ["GET", "POST"]
+  }
 });
 
-io.on('connection', socket => {
-    console.log('A user connected:', socket.id);
+const roomName = 'posture_room';
 
-    socket.on('join_room', (roomName) => {
-        socket.join(roomName);
-        console.log(`${socket.id} joined room: ${roomName}`);
+io.on('connection', (socket) => {
+  console.log('a user connected', socket.id);
 
-        // Notify ALL in room (including self)
-        io.to(roomName).emit('user_joined');
-    });
+  socket.on('join_room', (room) => {
+    socket.join(room);
+    console.log(`User ${socket.id} joined room ${room}`);
+    // Notify others in the room
+    socket.to(room).emit('user_joined');
+  });
 
-    socket.on('message', (message, roomName) => {
-        console.log(`RELAY [${message.type}] from ${socket.id} → ${roomName}`);
-        socket.to(roomName).emit('message', message);
-    });
+  socket.on('message', (msg, room) => {
+    // Broadcast the message to everyone else in the room
+    console.log(`Message from ${socket.id} in room ${room}`);
+    socket.to(room).emit('message', msg);
+  });
 
-    socket.on('disconnect', () => {
-        console.log('User disconnected:', socket.id);
-    });
+  socket.on('disconnect', () => {
+    console.log('user disconnected', socket.id);
+  });
 });
 
 const port = process.env.PORT || 3000;
-http.listen(port, () => {
+
+//
+// ▼▼▼ THIS IS THE FIX ▼▼▼
+//
+server.listen(port, () => { // <-- It should be server.listen, not http.listen
   console.log(`Server listening on port ${port}`);
 });
